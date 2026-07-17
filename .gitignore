@@ -1,1 +1,9 @@
-node_modules
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.env
+frontend/.env
+coverage/
+.DS_Store
+artifacts/
+cache/
