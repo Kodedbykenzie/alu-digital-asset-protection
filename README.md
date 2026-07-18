@@ -333,16 +333,3 @@ For public access, the contracts would need to be deployed to an Ethereum testne
 - React and Vite for the user interface and development server.
 - Web Crypto API for in-browser SHA-256 hashing.
 
-## GitHub Repository
-
-```text
-https://github.com/Kodedbykenzie/alu-digital-asset-protection
-```
-
-## Video Demonstration
-
-Add the final public video link here before submission:
-
-```text
-VIDEO LINK: [Insert link]
-```
