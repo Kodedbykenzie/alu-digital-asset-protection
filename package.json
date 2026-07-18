@@ -1,13 +1,16 @@
 {
   "name": "alu-digital-asset-protection",
-  "version": "1.0.0",
-  "description": "Hardhat project for registering the ALU logo as an ERC-721 asset and tokenising ownership shares as ERC-20 tokens.",
+  "version": "2.0.0",
+  "description": "Hardhat and React dApp for registering, verifying and tokenising the official ALU logo.",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
     "deploy": "hardhat run scripts/deploy.js",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
     "node": "hardhat node",
-    "hash-logo": "node scripts/hash-logo.js"
+    "hash-logo": "node scripts/hash-logo.js",
+    "frontend": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.2",

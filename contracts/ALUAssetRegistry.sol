@@ -20,7 +20,6 @@ contract ALUAssetRegistry is ERC721, Ownable {
     }
 
     uint256 private _nextTokenId;
-
     mapping(uint256 => AssetMetadata) private _assetMetadata;
     mapping(bytes32 => bool) public registeredContentHashes;
 
@@ -47,6 +46,8 @@ contract ALUAssetRegistry is ERC721, Ownable {
         string memory fileType,
         bytes32 contentHash
     ) public returns (uint256 tokenId) {
+        require(bytes(assetName).length > 0, "Asset name is required");
+        require(bytes(fileType).length > 0, "File type is required");
         require(contentHash != bytes32(0), "Invalid content hash");
         require(
             !registeredContentHashes[contentHash],
@@ -57,7 +58,6 @@ contract ALUAssetRegistry is ERC721, Ownable {
         tokenId = _nextTokenId;
 
         _safeMint(msg.sender, tokenId);
-
         _assetMetadata[tokenId] = AssetMetadata({
             assetName: assetName,
             fileType: fileType,
@@ -80,8 +80,8 @@ contract ALUAssetRegistry is ERC721, Ownable {
 
     /**
      * @notice Checks whether a supplied hash matches the stored logo hash.
-     * @dev This is a view function, so it only reads blockchain state and costs no gas
-     * when called off-chain.
+     * @dev This is a view function, so it only reads blockchain state and costs
+     * no gas when called off-chain.
      */
     function verifyLogoIntegrity(
         uint256 tokenId,

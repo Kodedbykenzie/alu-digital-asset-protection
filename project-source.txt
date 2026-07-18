@@ -1,0 +1,364 @@
+===== ROOT PACKAGE.JSON =====
+{
+  "name": "alu-digital-asset-protection",
+  "version": "1.0.0",
+  "description": "Hardhat project for registering the ALU logo as an ERC-721 asset and tokenising ownership shares as ERC-20 tokens.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat run scripts/deploy.js",
+    "node": "hardhat node",
+    "hash-logo": "node scripts/hash-logo.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "@openzeppelin/contracts": "5.0.2",
+    "hardhat": "^2.28.6",
+    "solc": "^0.8.20"
+  }
+}
+
+===== HARDHAT CONFIG =====
+require("@nomicfoundation/hardhat-toolbox");
+
+module.exports = {
+  solidity: "0.8.24",
+};
+
+// Use the locally installed solc-js compiler. This avoids download errors on
+// networks where Hardhat cannot reach binaries.soliditylang.org.
+const { subtask } = require("hardhat/config");
+const { TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD } = require("hardhat/builtin-tasks/task-names");
+
+subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD).setAction(async (args, hre, runSuper) => {
+  if (args.solcVersion === "0.8.20") {
+    return {
+      compilerPath: require.resolve("solc/soljson.js"),
+      isSolcJs: true,
+      version: "0.8.20",
+      longVersion: "0.8.20+commit.a1b79de6.Emscripten.clang",
+    };
+  }
+
+  return runSuper();
+});
+
+/** @type import('hardhat/config').HardhatUserConfig */
+module.exports = {
+  solidity: {
+    version: "0.8.20",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
+  networks: {
+    hardhat: {},
+    localhost: {
+      url: "http://127.0.0.1:8545",
+    },
+  },
+};
+
+===== ALU ASSET REGISTRY =====
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+/**
+ * @title ALUAssetRegistry
+ * @dev Registers the official ALU logo as a unique ERC-721 digital asset.
+ * The contract stores a SHA-256 fingerprint of the file so anyone can verify
+ * whether a logo file matches the official registered version.
+ */
+contract ALUAssetRegistry is ERC721, Ownable {
+    struct AssetMetadata {
+        string assetName;
+        string fileType;
+        bytes32 contentHash;
+        address registeredBy;
+        uint256 registeredAt;
+    }
+
+    uint256 private _nextTokenId;
+
+    mapping(uint256 => AssetMetadata) private _assetMetadata;
+    mapping(bytes32 => bool) public registeredContentHashes;
+
+    event AssetRegistered(
+        uint256 indexed tokenId,
+        string assetName,
+        string fileType,
+        bytes32 indexed contentHash,
+        address indexed registeredBy,
+        uint256 registeredAt
+    );
+
+    constructor() ERC721("ALU Asset Registry", "ALUAR") Ownable(msg.sender) {}
+
+    /**
+     * @notice Registers a new digital asset and mints an NFT to the caller.
+     * @param assetName Human-readable name of the asset.
+     * @param fileType File type, for example image/png.
+     * @param contentHash SHA-256 hash of the asset file as bytes32.
+     * @return tokenId The ERC-721 token ID assigned to the registered asset.
+     */
+    function registerAsset(
+        string memory assetName,
+        string memory fileType,
+        bytes32 contentHash
+    ) public returns (uint256 tokenId) {
+        require(contentHash != bytes32(0), "Invalid content hash");
+        require(
+            !registeredContentHashes[contentHash],
+            "Asset with this content hash already registered"
+        );
+
+        _nextTokenId += 1;
+        tokenId = _nextTokenId;
+
+        _safeMint(msg.sender, tokenId);
+
+        _assetMetadata[tokenId] = AssetMetadata({
+            assetName: assetName,
+            fileType: fileType,
+            contentHash: contentHash,
+            registeredBy: msg.sender,
+            registeredAt: block.timestamp
+        });
+
+        registeredContentHashes[contentHash] = true;
+
+        emit AssetRegistered(
+            tokenId,
+            assetName,
+            fileType,
+            contentHash,
+            msg.sender,
+            block.timestamp
+        );
+    }
+
+    /**
+     * @notice Checks whether a supplied hash matches the stored logo hash.
+     * @dev This is a view function, so it only reads blockchain state and costs no gas
+     * when called off-chain.
+     */
+    function verifyLogoIntegrity(
+        uint256 tokenId,
+        bytes32 suppliedHash
+    ) public view returns (bool, string memory) {
+        require(_ownerOf(tokenId) != address(0), "Asset does not exist");
+
+        if (_assetMetadata[tokenId].contentHash == suppliedHash) {
+            return (true, "Logo is authentic.");
+        }
+
+        return (false, "Warning: logo does not match.");
+    }
+
+    /**
+     * @notice Returns the full metadata stored for a registered asset.
+     */
+    function getAsset(uint256 tokenId) public view returns (AssetMetadata memory) {
+        require(_ownerOf(tokenId) != address(0), "Asset does not exist");
+        return _assetMetadata[tokenId];
+    }
+}
+
+===== ALU LOGO TOKEN =====
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+/**
+ * @title ALULogoToken
+ * @dev ERC-20 token representing fractional ownership shares of the ALU logo.
+ */
+contract ALULogoToken is ERC20, Ownable {
+    uint256 public constant INITIAL_SUPPLY = 1_000_000 * 10 ** 18;
+
+    constructor(address logoOwner) ERC20("ALU Logo Token", "ALUT") Ownable(logoOwner) {
+        require(logoOwner != address(0), "Invalid owner address");
+        _mint(logoOwner, INITIAL_SUPPLY);
+    }
+
+    /**
+     * @notice Distributes ALUT ownership shares from the owner to a recipient.
+     * @dev Amount must be provided in the smallest ERC-20 unit, so 100 tokens
+     * means 100 * 10^18 units if using ethers.parseUnits("100", 18).
+     */
+    function distributeShares(address recipient, uint256 amount) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient address");
+        require(amount > 0, "Amount must be greater than zero");
+        transfer(recipient, amount);
+    }
+
+    /**
+     * @notice Returns whole-number ownership percentage based on current balance.
+     * Example: 500,000 ALUT out of 1,000,000 ALUT returns 50.
+     */
+    function ownershipPercentage(address holder) external view returns (uint256) {
+        return (balanceOf(holder) * 100) / totalSupply();
+    }
+}
+
+===== DEPLOY SCRIPT =====
+const fs = require("fs");
+const crypto = require("crypto");
+const path = require("path");
+const hre = require("hardhat");
+
+function hashLogoFile() {
+  const logoPath = path.join(__dirname, "..", "alu-logo.png");
+
+  if (!fs.existsSync(logoPath)) {
+    throw new Error("alu-logo.png not found. Add the official ALU logo file to the project root.");
+  }
+
+  const fileBuffer = fs.readFileSync(logoPath);
+  return `0x${crypto.createHash("sha256").update(fileBuffer).digest("hex")}`;
+}
+
+async function main() {
+  const [deployer] = await hre.ethers.getSigners();
+  const logoHash = hashLogoFile();
+
+  console.log("Deploying contracts with account:", deployer.address);
+  console.log("ALU logo SHA-256 hash:", logoHash);
+
+  const Registry = await hre.ethers.getContractFactory("ALUAssetRegistry");
+  const registry = await Registry.deploy();
+  await registry.waitForDeployment();
+  console.log("ALUAssetRegistry deployed to:", await registry.getAddress());
+
+  const registerTx = await registry.registerAsset("ALU Official Logo", "image/png", logoHash);
+  const receipt = await registerTx.wait();
+  console.log("ALU logo registered. Transaction hash:", receipt.hash);
+  console.log("Registered token ID: 1");
+
+  const LogoToken = await hre.ethers.getContractFactory("ALULogoToken");
+  const logoToken = await LogoToken.deploy(deployer.address);
+  await logoToken.waitForDeployment();
+  console.log("ALULogoToken deployed to:", await logoToken.getAddress());
+  console.log("Full ALUT supply minted to:", deployer.address);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
+===== EXISTING TESTS =====
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+const ALU_LOGO_HASH = "0xe03128e7ed668d74c334ed965edf89d0e1b3da112f6aeb6233bfd191ad829348";
+const WRONG_LOGO_HASH = "0x1111111111111111111111111111111111111111111111111111111111111111";
+
+describe("ALUAssetRegistry and ALULogoToken", function () {
+  async function deployContractsFixture() {
+    const [owner, recipient, otherAccount] = await ethers.getSigners();
+
+    const Registry = await ethers.getContractFactory("ALUAssetRegistry");
+    const registry = await Registry.deploy();
+    await registry.waitForDeployment();
+
+    const LogoToken = await ethers.getContractFactory("ALULogoToken");
+    const logoToken = await LogoToken.deploy(owner.address);
+    await logoToken.waitForDeployment();
+
+    return { owner, recipient, otherAccount, registry, logoToken };
+  }
+
+  describe("ALUAssetRegistry ERC-721 registration", function () {
+    it("registers the ALU logo successfully and returns token ID 1", async function () {
+      const { owner, registry } = await deployContractsFixture();
+
+      const predictedTokenId = await registry.registerAsset.staticCall(
+        "ALU Official Logo",
+        "image/png",
+        ALU_LOGO_HASH
+      );
+      expect(predictedTokenId).to.equal(1);
+
+      await registry.registerAsset("ALU Official Logo", "image/png", ALU_LOGO_HASH);
+      expect(await registry.ownerOf(1)).to.equal(owner.address);
+    });
+
+    it("rejects a duplicate registration using the same hash", async function () {
+      const { registry } = await deployContractsFixture();
+
+      await registry.registerAsset("ALU Official Logo", "image/png", ALU_LOGO_HASH);
+
+      await expect(
+        registry.registerAsset("ALU Official Logo Copy", "image/png", ALU_LOGO_HASH)
+      ).to.be.revertedWith("Asset with this content hash already registered");
+    });
+
+    it("verifyLogoIntegrity returns true for the correct logo hash", async function () {
+      const { registry } = await deployContractsFixture();
+
+      await registry.registerAsset("ALU Official Logo", "image/png", ALU_LOGO_HASH);
+      const result = await registry.verifyLogoIntegrity(1, ALU_LOGO_HASH);
+
+      expect(result[0]).to.equal(true);
+      expect(result[1]).to.equal("Logo is authentic.");
+    });
+
+    it("verifyLogoIntegrity returns false for an incorrect logo hash", async function () {
+      const { registry } = await deployContractsFixture();
+
+      await registry.registerAsset("ALU Official Logo", "image/png", ALU_LOGO_HASH);
+      const result = await registry.verifyLogoIntegrity(1, WRONG_LOGO_HASH);
+
+      expect(result[0]).to.equal(false);
+      expect(result[1]).to.equal("Warning: logo does not match.");
+    });
+
+    it("getAsset returns the correct asset name and file type", async function () {
+      const { registry } = await deployContractsFixture();
+
+      await registry.registerAsset("ALU Official Logo", "image/png", ALU_LOGO_HASH);
+      const asset = await registry.getAsset(1);
+
+      expect(asset.assetName).to.equal("ALU Official Logo");
+      expect(asset.fileType).to.equal("image/png");
+      expect(asset.contentHash).to.equal(ALU_LOGO_HASH);
+    });
+  });
+
+  describe("ALULogoToken ERC-20 tokenisation", function () {
+    it("mints the full supply of 1,000,000 ALUT to the logo owner", async function () {
+      const { owner, logoToken } = await deployContractsFixture();
+      const fullSupply = ethers.parseUnits("1000000", 18);
+
+      expect(await logoToken.totalSupply()).to.equal(fullSupply);
+      expect(await logoToken.balanceOf(owner.address)).to.equal(fullSupply);
+    });
+
+    it("distributeShares transfers the specified tokens to a recipient", async function () {
+      const { recipient, logoToken } = await deployContractsFixture();
+      const amount = ethers.parseUnits("100000", 18);
+
+      await logoToken.distributeShares(recipient.address, amount);
+
+      expect(await logoToken.balanceOf(recipient.address)).to.equal(amount);
+    });
+
+    it("ownershipPercentage returns the correct whole-number percentage", async function () {
+      const { recipient, logoToken } = await deployContractsFixture();
+      const amount = ethers.parseUnits("250000", 18);
+
+      await logoToken.distributeShares(recipient.address, amount);
+
+      expect(await logoToken.ownershipPercentage(recipient.address)).to.equal(25);
+    });
+  });
+});

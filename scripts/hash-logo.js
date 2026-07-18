@@ -5,7 +5,9 @@ const path = require("path");
 const logoPath = path.join(__dirname, "..", "alu-logo.png");
 
 if (!fs.existsSync(logoPath)) {
-  throw new Error("alu-logo.png not found. Put the official ALU logo in the project root first.");
+  throw new Error(
+    "alu-logo.png not found. Put the official ALU logo in the project root first."
+  );
 }
 
 const fileBuffer = fs.readFileSync(logoPath);

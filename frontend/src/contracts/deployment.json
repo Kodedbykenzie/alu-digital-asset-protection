@@ -1,0 +1,21 @@
+{
+  "chainId": 31337,
+  "registryAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "tokenAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "logoTokenId": 1,
+  "logoHash": "0xe03128e7ed668d74c334ed965edf89d0e1b3da112f6aeb6233bfd191ad829348",
+  "sampleHolders": [
+    {
+      "label": "Student Representative",
+      "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+    },
+    {
+      "label": "Communications Office",
+      "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+    },
+    {
+      "label": "Faculty Representative",
+      "address": "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+    }
+  ]
+}
